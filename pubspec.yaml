@@ -1,14 +1,21 @@
 name: tsp_route_finder
-description: Fast, dependency-free Traveling Salesman Problem (TSP) solver for Dart and Flutter. Exact for small inputs, 2-opt / Or-opt optimized for thousands of stops.
-version: 0.1.0
+description: Fast, dependency-free TSP and delivery route optimization for Dart and Flutter. Optimal small routes, multi-vehicle plans with capacity and time windows.
+version: 0.2.0
 repository: https://github.com/kareemmohamed111/tsp_route_finder
 issue_tracker: https://github.com/kareemmohamed111/tsp_route_finder/issues
+screenshots:
+  - description: Nearest neighbor vs optimized route for 120 stops around Cairo.
+    path: doc/images/before_after.png
+  - description: Delivery plan for 70 stops and 4 drivers with capacity and shifts.
+    path: doc/images/delivery.png
+  - description: Concept illustration of a delivery driver app built on RoutePlanner.
+    path: doc/images/app_concept.jpg
 topics:
   - tsp
   - routing
   - route-optimization
   - algorithm
-  - maps
+  - delivery
 
 environment:
   sdk: ^3.0.0

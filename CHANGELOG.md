@@ -1,3 +1,24 @@
+## 0.2.0
+
+### Added
+- `RoutePlanner`: delivery planning for multiple vehicles (Vehicle Routing
+  Problem) with `DeliveryStop`, `Vehicle`, `TimeWindow`, `RoutePlan` and
+  `VehicleRoute`.
+  - Vehicle capacity and per-stop demand.
+  - Per-stop time windows and service times.
+  - Driver shifts, max stops per vehicle, and different start / end locations
+    or one-way routes per vehicle.
+  - `balance` option to spread stops evenly.
+  - A full schedule per route (arrival and service start times, end time,
+    distance, travel time, load).
+  - Stops that cannot be served are reported in `RoutePlan.unassigned`.
+  - Uses regret insertion followed by relocate, swap, 2-opt and 2-opt* local
+    search.
+- `TspRouteFinder.solveAsync`, `TspRouteFinder.solveMatrixAsync` and
+  `RoutePlanner.planAsync`, which run on a background isolate (on the web,
+  asynchronously on the main thread).
+- README images, pub.dev screenshots and a script to regenerate them.
+
 ## 0.1.0
 
 ### Added

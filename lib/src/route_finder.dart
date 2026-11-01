@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'algorithms.dart';
+import 'background.dart';
 import 'location.dart';
 
 /// Signature of a function that returns the travel cost from [from] to [to].
@@ -93,9 +94,8 @@ class TspResult {
 /// print(result.totalDistance);  // kilometers
 /// ```
 ///
-/// All methods are synchronous and pure Dart. For very large inputs in a
-/// Flutter app, call them inside `compute()` or `Isolate.run()` to keep the
-/// UI responsive.
+/// [solve] and [solveMatrix] are synchronous. For large inputs in a Flutter
+/// app, use [solveAsync] or [solveMatrixAsync] to keep the UI responsive.
 abstract final class TspRouteFinder {
   /// Largest number of stops accepted by [TspStrategy.exact].
   static const int maxExactSize = 16;
@@ -176,6 +176,56 @@ abstract final class TspRouteFinder {
     }
     return _solve(
         n, dist, startIndex, endIndex, returnToStart, strategy, timeLimit);
+  }
+
+  /// Like [solve], but runs on a background isolate so a Flutter UI stays
+  /// responsive while large inputs are being solved.
+  ///
+  /// On the web, where isolates are not available, the work runs
+  /// asynchronously on the main thread instead.
+  ///
+  /// A custom [distance] must be a top-level or static function, or a closure
+  /// that only captures sendable data (numbers, strings, lists, maps), because
+  /// it is copied to the background isolate.
+  static Future<TspResult> solveAsync(
+    List<TspLocation> locations, {
+    int startIndex = 0,
+    int? endIndex,
+    bool returnToStart = true,
+    TspStrategy strategy = TspStrategy.auto,
+    DistanceFunction distance = haversineDistance,
+    Duration? timeLimit,
+  }) {
+    final copy = List<TspLocation>.of(locations);
+    return runInBackground(() => solve(
+          copy,
+          startIndex: startIndex,
+          endIndex: endIndex,
+          returnToStart: returnToStart,
+          strategy: strategy,
+          distance: distance,
+          timeLimit: timeLimit,
+        ));
+  }
+
+  /// Like [solveMatrix], but runs on a background isolate. See [solveAsync].
+  static Future<TspResult> solveMatrixAsync(
+    List<List<num>> matrix, {
+    int startIndex = 0,
+    int? endIndex,
+    bool returnToStart = true,
+    TspStrategy strategy = TspStrategy.auto,
+    Duration? timeLimit,
+  }) {
+    final copy = [for (final row in matrix) List<num>.of(row)];
+    return runInBackground(() => solveMatrix(
+          copy,
+          startIndex: startIndex,
+          endIndex: endIndex,
+          returnToStart: returnToStart,
+          strategy: strategy,
+          timeLimit: timeLimit,
+        ));
   }
 
   /// Total cost of visiting [locations] in the given [route] order, using

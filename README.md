@@ -1,5 +1,7 @@
 # tsp_route_finder
 
+![tsp_route_finder: from a tangled route to an optimized one](https://raw.githubusercontent.com/kareemmohamed111/tsp_route_finder/master/doc/images/banner.jpg)
+
 [![pub package](https://img.shields.io/pub/v/tsp_route_finder.svg)](https://pub.dev/packages/tsp_route_finder)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -8,6 +10,11 @@ Flutter. Give it a list of stops and it tells you the order to visit them so
 the total distance is as short as possible. It works for delivery routes,
 field-sales visits, pickup planning and trip itineraries.
 
+It also plans **multi-vehicle deliveries** with capacities, time windows,
+service times and driver shifts.
+
+![Nearest neighbor vs optimized route for 120 stops](https://raw.githubusercontent.com/kareemmohamed111/tsp_route_finder/master/doc/images/before_after.png)
+
 ## Features
 
 - **Optimal routes for small inputs.** Up to 12 stops are solved exactly by
@@ -15,6 +22,11 @@ field-sales visits, pickup planning and trip itineraries.
 - **Near-optimal routes for large inputs.** Nearest neighbor followed by
   **2-opt** and **Or-opt** local search. 1,000 stops take about 0.1 s.
 - **Round trips or one-way routes**, with an optional fixed final stop.
+- **Delivery planning for several vehicles** (`RoutePlanner`): vehicle
+  capacity, per-stop time windows and service times, driver shifts, max stops
+  per driver, different start / end locations, and even workload balancing.
+- **Background solving.** `solveAsync` and `planAsync` run on a separate
+  isolate so your Flutter UI never freezes.
 - **GPS coordinates or your own costs.** Distance defaults to haversine
   (great-circle) km. You can also pass a custom distance function or a
   distance matrix, for example road distances or driving times from Google
@@ -23,6 +35,27 @@ field-sales visits, pickup planning and trip itineraries.
 - **Pure Dart, no dependencies.** Runs on Android, iOS, web, Windows, macOS,
   Linux and the server, and works alongside `google_maps_flutter`,
   `flutter_map` or any other map package.
+
+## New in 0.2.0
+
+- **`RoutePlanner`: delivery planning for multiple vehicles** (a Vehicle
+  Routing Problem solver).
+  - **Vehicle capacity**: each `DeliveryStop` has a `demand`, and each
+    `Vehicle` has a `capacity`.
+  - **Time windows**: a stop can only be served between `earliest` and
+    `latest`; vehicles wait if they arrive early.
+  - **Service time** spent at each stop.
+  - **Driver shifts** (`Vehicle.shift`) and **max stops per driver**.
+  - **Different start and end locations per vehicle**, or one-way routes.
+  - **`balance: true`** to spread stops evenly between drivers.
+  - **Full schedule** for every route: arrival and service start times, end
+    time, distance, driving time and load.
+  - **Unservable stops** are returned in `plan.unassigned` instead of
+    throwing.
+- **`solveAsync`, `solveMatrixAsync` and `planAsync`.** Run the solver on a
+  background isolate on Android, iOS and desktop, so the UI stays smooth. On
+  the web they run asynchronously on the main thread, and the package still
+  supports every platform.
 
 ## New in 0.1.0
 
@@ -147,17 +180,82 @@ TspRouteFinder.solve(
 );
 ```
 
-### Flutter tips
+### Keep the UI smooth
 
-- Draw the route with `result.closedRoute.map((i) => LatLng(stops[i].latitude, stops[i].longitude))`.
-- For thousands of stops, run the solver off the UI thread:
-  `await Isolate.run(() => TspRouteFinder.solve(stops))` (or `compute(...)`).
+```dart
+// Runs on a background isolate (Android, iOS, desktop). On the web it runs
+// asynchronously on the main thread.
+final result = await TspRouteFinder.solveAsync(stops);
+```
+
+A custom `distance` function passed to `solveAsync` must be a top-level or
+static function, or a closure that captures only plain data.
+
+Draw the route with
+`result.closedRoute.map((i) => LatLng(stops[i].latitude, stops[i].longitude))`.
+
+## Delivery planning (multiple vehicles)
+
+`RoutePlanner` splits stops between vehicles and orders each route, while
+respecting capacity, time windows, service times and shifts. It minimizes the
+total distance.
+
+![4 drivers, 70 deliveries](https://raw.githubusercontent.com/kareemmohamed111/tsp_route_finder/master/doc/images/delivery.png)
+
+```dart
+const warehouse = TspLocation(latitude: 30.044, longitude: 31.236);
+
+final plan = RoutePlanner.plan(
+  depot: warehouse,
+  stops: [
+    DeliveryStop(location: customerA, demand: 3),
+    // Must be served between 09:00 and 10:00 (minutes after 08:00).
+    DeliveryStop(location: customerB, demand: 5, timeWindow: TimeWindow(60, 120)),
+    // Takes 10 minutes to unload.
+    DeliveryStop(location: customerC, demand: 2, serviceTime: 10),
+  ],
+  vehicles: const [
+    Vehicle(name: 'Ahmed', capacity: 40, shift: TimeWindow(0, 480)),
+    Vehicle(name: 'Sara', capacity: 40, shift: TimeWindow(0, 480)),
+    // Starts from home and does not return to the warehouse.
+    Vehicle(name: 'Omar', capacity: 25, start: omarHome, returnToStart: false),
+  ],
+  averageSpeedKmh: 35, // Or pass travelTime: (a, b) => minutes from your API.
+);
+
+for (final route in plan.routes) {
+  print('Vehicle ${route.vehicleIndex}: stops ${route.stops}, '
+      '${route.distance.toStringAsFixed(1)} km, back at ${route.endTime} min');
+}
+if (!plan.isComplete) print('Could not serve: ${plan.unassigned}');
+```
+
+| Option | Where | Meaning |
+|---|---|---|
+| `demand` | `DeliveryStop` | Capacity used by the stop (parcels, kg, seats…). |
+| `timeWindow` | `DeliveryStop` | When service may start. Early vehicles wait. |
+| `serviceTime` | `DeliveryStop` | Minutes spent at the stop. |
+| `capacity` | `Vehicle` | Maximum total demand. |
+| `shift` | `Vehicle` | Departure time and the time it must be finished by. |
+| `maxStops` | `Vehicle` | Maximum number of stops for this vehicle. |
+| `start` / `end` / `returnToStart` | `Vehicle` | Own start location, own end location, or a one-way route. |
+| `balance` | `RoutePlanner.plan` | Spread stops evenly between vehicles. |
+| `travelTime` / `averageSpeedKmh` | `RoutePlanner.plan` | How driving time is calculated. |
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kareemmohamed111/tsp_route_finder/master/doc/images/app_concept.jpg" width="280"
+       alt="Concept of a driver app built on top of RoutePlanner">
+  <br><em>Concept illustration: a driver app showing the planned stops.</em>
+</p>
+
+Times are plain numbers in minutes. You pick the zero point, for example
+`0` = 08:00. Use `RoutePlanner.planAsync` to plan in the background.
 
 ## Migrating from 0.0.x
 
 The 0.0.3 API still works, but it is deprecated and will be removed in 1.0.0:
 
-| 0.0.3 | 0.1.0 |
+| 0.0.3 | 0.1.0 and later |
 |---|---|
 | `CitiesLocations(cityName: …, latitude: …, longitude: …)` | `TspLocation(name: …, latitude: …, longitude: …)` |
 | `await TspPackage.calculateTspRoute(locations: l, startingLocationIndex: s)` | `TspRouteFinder.solve(l, startIndex: s).route` |

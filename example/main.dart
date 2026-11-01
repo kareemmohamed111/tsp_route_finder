@@ -6,7 +6,7 @@
 
 import 'package:tsp_route_finder/tsp_route_finder.dart';
 
-void main() {
+Future<void> main() async {
   const stops = [
     TspLocation(latitude: 30.0454, longitude: 31.2332, name: 'Cairo'),
     TspLocation(latitude: 30.7865, longitude: 31.0012, name: 'Tanta'),
@@ -53,6 +53,32 @@ void main() {
   final saved = greedy.totalDistance - roundTrip.totalDistance;
   print('Nearest neighbor would be ${greedy.totalDistance.toStringAsFixed(1)} '
       'km, ${saved.toStringAsFixed(1)} km longer.');
+
+  // 5. Solve in the background so a Flutter UI stays smooth.
+  final background = await TspRouteFinder.solveAsync(stops);
+  print(
+      '\nBackground solve: ${background.totalDistance.toStringAsFixed(1)} km');
+
+  // 6. Several drivers with capacity, time windows and shifts.
+  //    Times are minutes after 08:00.
+  final plan = RoutePlanner.plan(
+    depot: stops[0], // Cairo warehouse.
+    stops: [
+      for (final city in stops.skip(1))
+        DeliveryStop(location: city, demand: 2, serviceTime: 15),
+    ],
+    vehicles: const [
+      Vehicle(name: 'North', capacity: 8, shift: TimeWindow(0, 12 * 60)),
+      Vehicle(name: 'South', capacity: 8, shift: TimeWindow(0, 24 * 60)),
+    ],
+    averageSpeedKmh: 80,
+  );
+  print('\nDelivery plan (${plan.totalDistance.toStringAsFixed(0)} km):');
+  for (final route in plan.routes) {
+    final cities = route.reorder(stops.skip(1).toList());
+    print('  Vehicle ${route.vehicleIndex}: ${_names(cities)} '
+        '(${route.distance.toStringAsFixed(0)} km, load ${route.load})');
+  }
 }
 
 String _names(List<TspLocation> stops) => stops.map((s) => s.name).join(' -> ');

@@ -16,6 +16,7 @@
 /// ```
 library;
 
+export 'src/delivery.dart';
 export 'src/legacy.dart';
 export 'src/location.dart';
 export 'src/route_finder.dart';
